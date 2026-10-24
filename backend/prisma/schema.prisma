@@ -1,0 +1,362 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum StatutActif {
+  Actif
+  Supprime
+}
+
+enum StatutNote {
+  Valide
+  Supprimee
+}
+
+enum TypeEvaluation {
+  Examen
+  TP
+  Projet
+  Rattrapage
+  Controle_Continu
+}
+
+enum UserRole {
+  super_admin
+  admin
+  it_support
+  gestionnaire_notes
+  enseignant
+  etudiant
+}
+
+enum SessionType {
+  Normale
+  Rattrapage
+  Speciale
+}
+
+enum DecisionJuryType {
+  Admis
+  Ajourne
+  Redoublement
+  Exclusion
+}
+
+enum MentionType {
+  Passable
+  Assez_Bien
+  Bien
+  Tres_Bien
+  Excellence
+}
+
+enum NotificationType {
+  Info
+  Alerte
+  Systeme
+}
+
+enum EtudiantStatut {
+  Actif
+  Suspendu
+  Redoublant
+  Diplome
+  Abandon
+  Exclu
+  Transfere
+  Supprime
+}
+
+enum ParcoursEtatMetier {
+  Actif
+  En_Developpement
+  Archive
+  Obsolete
+}
+
+enum InstitutionStatut {
+  Active
+  En_Projet
+  Archivee
+}
+
+model Institution {
+  id            String             @id @default("default")
+  nom           String
+  sigle         String
+  adresse       String?
+  ville         String?
+  pays          String?
+  email_contact String?
+  site_web      String?
+  description   String?
+  statut        InstitutionStatut  @default(Active)
+  created_at    DateTime           @default(now())
+  updated_at    DateTime           @updatedAt
+  parcours      Parcours[]
+  @@map("institution")
+}
+
+model Etudiant {
+  id_etudiant       String      @id @default(uuid())
+  numero_matricule  String      @unique
+  nom_etudiant      String
+  prenom_etudiant   String
+  date_naissance    String?
+  filiere           String
+  annee_academique  String
+  contact_etudiant  String?
+  email_etudiant    String?
+  created_at        DateTime    @default(now())
+  statut            EtudiantStatut @default(Actif)
+  notes             Note[]
+  parcours_id       String?
+  niveau_id         String?
+  user_id           String?      @unique
+  parcours          Parcours?    @relation(fields: [parcours_id], references: [id])
+  niveau            Niveau?      @relation(fields: [niveau_id], references: [id])
+  user              Users?       @relation(fields: [user_id], references: [id])
+  delibarations     Deliberation[]
+  notifications     Notification[]
+  @@map("etudiant")
+}
+
+model Enseignant {
+  id_enseignant     String      @id @default(uuid())
+  nom_enseignant    String
+  prenom_enseignant String
+  departement       String
+  contact_enseignant String?
+  email_enseignant  String?
+  statut            StatutActif @default(Actif)
+  modules           Module[]
+  parcours_diriges Parcours[] @relation("ParcoursResponsable")
+  user_id           String?              @unique
+  user              Users?               @relation(fields: [user_id], references: [id])
+  matieres          EnseignantMatiere[]
+  notifications     Notification[]
+  @@map("enseignant")
+}
+
+model Module {
+  id_module                  String      @id @default(uuid())
+  code_module                String      @unique
+  nom_module                 String
+  credits_ects               Int
+  coefficient_module         Int
+  semestre                   String
+  annee_academique           String
+  id_enseignant_responsable  String
+  statut                     StatutActif @default(Actif)
+  niveau_libelle             String?
+  enseignant                 Enseignant  @relation(fields: [id_enseignant_responsable], references: [id_enseignant])
+  notes                      Note[]
+  matieres                   Matiere[]
+  annee_universitaire_id     String?
+  niveau_id                  String?
+  parcours_id                String?
+  annee_universitaire        AnneeUniversitaire? @relation(fields: [annee_universitaire_id], references: [id])
+  niveau                     Niveau?             @relation(fields: [niveau_id], references: [id])
+  parcours                   Parcours?           @relation(fields: [parcours_id], references: [id])
+  @@map("module")
+}
+
+model Note {
+  id_note          String         @id @default(uuid())
+  id_etudiant      String
+  id_module        String
+  note_obtenue     Float
+  type_evaluation  TypeEvaluation
+  date_saisie      String
+  statut           StatutNote     @default(Valide)
+  etudiant         Etudiant       @relation(fields: [id_etudiant], references: [id_etudiant])
+  module           Module         @relation(fields: [id_module], references: [id_module])
+  session_examen_id String?
+  session_examen    SessionExamen? @relation(fields: [session_examen_id], references: [id])
+  history           NoteHistory[]
+  deliberations     Deliberation[]
+  @@map("note")
+}
+
+model Users {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  password      String
+  nom           String
+  prenom        String
+  role          UserRole
+  statut        StatutActif  @default(Actif)
+  last_login_at DateTime?
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  etudiant      Etudiant?
+  enseignant    Enseignant?
+  notifications Notification[]
+  audit_logs    AuditLog[]
+  @@map("users")
+}
+
+model AnneeUniversitaire {
+  id         String    @id @default(uuid())
+  libelle    String    @unique
+  date_debut String
+  date_fin   String
+  est_active Boolean   @default(false)
+  statut     StatutActif @default(Actif)
+  created_at DateTime  @default(now())
+  niveaux    Niveau[]
+  modules    Module[]
+  sessions   SessionExamen[]
+  @@map("annee_universitaire")
+}
+
+model Parcours {
+  id               String             @id @default(uuid())
+  code             String             @unique
+  nom              String
+  description      String?
+  statut           StatutActif        @default(Actif)
+  etat_metier      ParcoursEtatMetier @default(Actif)
+  responsable_id   String?
+  responsable      Enseignant?        @relation("ParcoursResponsable", fields: [responsable_id], references: [id_enseignant])
+  institution_id   String             @default("default")
+  institution      Institution        @relation(fields: [institution_id], references: [id])
+  created_at       DateTime           @default(now())
+  updated_at       DateTime           @default(now()) @updatedAt
+  niveaux          Niveau[]
+  modules          Module[]
+  etudiants        Etudiant[]
+  @@map("parcours")
+}
+
+model Niveau {
+  id                     String             @id @default(uuid())
+  code                   String             @unique
+  nom                    String
+  parcours_id            String
+  annee_universitaire_id String
+  statut                 StatutActif        @default(Actif)
+  parcours               Parcours           @relation(fields: [parcours_id], references: [id])
+  annee_universitaire    AnneeUniversitaire @relation(fields: [annee_universitaire_id], references: [id])
+  modules                Module[]
+  etudiants              Etudiant[]
+  @@map("niveau")
+}
+
+model Matiere {
+  id               String             @id @default(uuid())
+  code             String             @unique
+  nom              String
+  coefficient      Float              @default(1)
+  module_id        String
+  semestre         String             @default("S1")
+  statut           StatutActif        @default(Actif)
+  module           Module             @relation(fields: [module_id], references: [id_module])
+  enseignants      EnseignantMatiere[]
+  @@map("matiere")
+}
+
+model EnseignantMatiere {
+  id            String      @id @default(uuid())
+  enseignant_id String
+  matiere_id    String
+  created_at    DateTime    @default(now())
+  enseignant    Enseignant  @relation(fields: [enseignant_id], references: [id_enseignant])
+  matiere       Matiere     @relation(fields: [matiere_id], references: [id])
+  @@unique([enseignant_id, matiere_id])
+  @@map("enseignant_matiere")
+}
+
+model SessionExamen {
+  id                     String             @id @default(uuid())
+  nom                    String
+  type_session           SessionType
+  date_debut             String
+  date_fin               String
+  annee_universitaire_id String
+  statut                 StatutActif        @default(Actif)
+  annee_universitaire    AnneeUniversitaire @relation(fields: [annee_universitaire_id], references: [id])
+  notes                  Note[]
+  @@map("session_examen")
+}
+
+model NoteHistory {
+  id             String   @id @default(uuid())
+  note_id         String
+  ancienne_valeur Float
+  nouvelle_valeur Float
+  motif           String?
+  modifie_par     String?
+  date_modif      DateTime @default(now())
+  note            Note     @relation(fields: [note_id], references: [id_note])
+  @@map("note_history")
+}
+
+model Deliberation {
+  id                String   @id @default(uuid())
+  etudiant_id        String
+  note_id            String
+  moyenne_generale   Float
+  est_valide         Boolean
+  date_deliberation  DateTime @default(now())
+  etudiant           Etudiant @relation(fields: [etudiant_id], references: [id_etudiant])
+  note               Note     @relation(fields: [note_id], references: [id_note])
+  decision_jury      DecisionJury?
+  mention            Mention?
+  @@map("deliberation")
+}
+
+model DecisionJury {
+  id               String           @id @default(uuid())
+  deliberation_id  String           @unique
+  decision         DecisionJuryType
+  commentaire      String?
+  date_decision    DateTime         @default(now())
+  deliberation     Deliberation     @relation(fields: [deliberation_id], references: [id])
+  @@map("decision_jury")
+}
+
+model Mention {
+  id               String        @id @default(uuid())
+  deliberation_id  String        @unique
+  mention          MentionType
+  note_min         Float?
+  note_max         Float?
+  deliberation     Deliberation  @relation(fields: [deliberation_id], references: [id])
+  @@map("mention")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  user_id      String?
+  action       String
+  table_cible  String
+  record_id    String?
+  details      String?
+  ip_address   String?
+  created_at   DateTime @default(now())
+  user         Users?   @relation(fields: [user_id], references: [id])
+  @@map("audit_log")
+}
+
+model Notification {
+  id             String           @id @default(uuid())
+  type           NotificationType
+  titre          String
+  message        String
+  lu             Boolean          @default(false)
+  user_id        String?
+  etudiant_id    String?
+  enseignant_id  String?
+  created_at     DateTime         @default(now())
+  user           Users?           @relation(fields: [user_id], references: [id])
+  etudiant       Etudiant?        @relation(fields: [etudiant_id], references: [id_etudiant])
+  enseignant     Enseignant?      @relation(fields: [enseignant_id], references: [id_enseignant])
+  @@map("notification")
+}
